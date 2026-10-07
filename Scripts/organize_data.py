@@ -3,14 +3,18 @@
 Moves, inside the dataset root:
   - numeric patient folders (new app, IDs 109+)       -> New_app_patients/
   - loose Rijuven .raw (ECG) and .mp3 (PCG) files     -> Rijuven_patients/
-  - DB MultiScope spreadsheets (every version)        -> DB_Multiscope/
-  - DB MultiScope copies inside patient folders       -> DB_Multiscope/ (renamed 'from_<ID>_<name>')
-  - Patients_MultiScope spreadsheet                   -> Patients_Multiscope/
+  - DB MultiScope 18.09.2026 and 21.07.2026           -> DB_Multiscope/
+  - every other DB MultiScope version, including
+    copies inside patient folders ('from_<ID>_<name>') -> Unused/DB_old_versions/
   - README files                                      -> README/
+  - Patients_MultiScope spreadsheet                   -> Unused/Patients_Multiscope/
   - loose new app CSVs identical to a file that is
-    already inside a patient folder (e.g. P135)       -> Duplicates/
+    already inside a patient folder (e.g. P135)       -> Unused/Duplicates/
+  - folders the supervisor said to disregard
+    (ECGs, Old_12_lead_ECG, Samsung_12_lead_ECG,
+    pickled, and the two above if they already exist) -> Unused/
 
-Everything else (ECGs/, 12-lead folders, ...) is left untouched.
+Everything else (New_12_lead_ECG/, Quality_Annotations/, ...) is left untouched.
 Running it again does nothing, because there are no files left to move.
 
 Usage:
@@ -30,9 +34,17 @@ DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "data" / "DatasetCHVNGE"
 NEW_APP_DIR = "New_app_patients"
 RIJUVEN_DIR = "Rijuven_patients"
 DB_DIR = "DB_Multiscope"
-PATIENTS_DIR = "Patients_Multiscope"
 README_DIR = "README"
-DUPLICATES_DIR = "Duplicates"
+UNUSED_DIR = "Unused"
+PATIENTS_DIR = "Unused/Patients_Multiscope"
+DUPLICATES_DIR = "Unused/Duplicates"
+OLD_DB_DIR = "Unused/DB_old_versions"
+
+# DB versions kept in DB_Multiscope/: the one used in the thesis and the previous one, for comparison
+KEEP_DB = ("18.09.2026_", "21.07.2026_")
+
+# Top-level folders that are not used in the thesis
+UNUSED_ITEMS = {"ECGs", "Old_12_lead_ECG", "Samsung_12_lead_ECG", "pickled", "Patients_Multiscope", "Duplicates"}
 
 RIJUVEN_RE = re.compile(r"^\d+_.+\.(raw|mp3)$", re.IGNORECASE)        # e.g. 1_AV.raw, 10_PV2.mp3
 DB_RE = re.compile(r"DB[ _]?MultiScope", re.IGNORECASE)               # every DB MultiScope version
@@ -56,6 +68,8 @@ def find_folder_copy(path: Path, root: Path) -> Path | None:
 def destination(path: Path, root: Path) -> Path | None:
     """Folder where a top-level item belongs, or None to leave it where it is."""
     name = path.name
+    if name in UNUSED_ITEMS:
+        return root / UNUSED_DIR
     if path.is_dir():
         return root / NEW_APP_DIR if name.isdigit() else None
     if name.startswith("~$"):  # Office lock file
@@ -67,7 +81,7 @@ def destination(path: Path, root: Path) -> Path | None:
     if path.suffix.lower() in EXCEL_EXTS and PATIENTS_RE.match(name):
         return root / PATIENTS_DIR
     if is_db_file(path):
-        return root / DB_DIR
+        return root / (DB_DIR if name.startswith(KEEP_DB) else OLD_DB_DIR)
     if NEW_APP_CSV_RE.search(name) and find_folder_copy(path, root):
         return root / DUPLICATES_DIR
     return None
@@ -84,7 +98,13 @@ def plan_moves(root: Path) -> tuple[list[tuple[Path, Path]], list[str]]:
     for folder in sorted(patient_dirs):
         for path in sorted(folder.iterdir()):
             if is_db_file(path) and not path.name.startswith("~$"):
-                moves.append((path, root / DB_DIR / f"from_{folder.name}_{path.name}"))
+                moves.append((path, root / OLD_DB_DIR / f"from_{folder.name}_{path.name}"))
+
+    # Old DB versions already inside DB_Multiscope/
+    if (root / DB_DIR).is_dir():
+        for path in sorted((root / DB_DIR).iterdir()):
+            if is_db_file(path) and not path.name.startswith(KEEP_DB):
+                moves.append((path, root / OLD_DB_DIR / path.name))
 
     # Top-level items
     for path in sorted(root.iterdir()):
@@ -113,7 +133,7 @@ def main() -> None:
             skipped.append(source.name)
             continue
         if not args.dry_run:
-            target.parent.mkdir(exist_ok=True)
+            target.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(source), str(target))
         moved[target.parent.name] += 1
 
