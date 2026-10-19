@@ -29,6 +29,7 @@ REPORT_COLUMN = "Report_ecoTT"                        # free-text echocardiograp
 RIJUVEN_ECG_FS = 500    # not stored in the .raw files, value from the original script
 RIJUVEN_MAX_ID = 108    # Rijuven files of later patients are ignored (they also have new app recordings)
 NO_SIGNAL_IDS = [71, 72, 73, 74, 75, 76, 77, 131, 132, 273, 274, 275]   # no usable ECG/PCG
+DATE_FIXES = {199: pd.Timestamp("2025-04-23")}   # EvaluationDate typos confirmed by the supervisor (07/10/2026)
 
 # Column names that identify a patient (compared in lowercase)
 IDENTIFIER_NAMES = {"name", "nome", "nsc", "proc", "birthday", "data de nascimento"}
@@ -54,7 +55,10 @@ def load_db_version(path: Path) -> pd.DataFrame:
     """One DB version without identifiers, one row per numeric ID."""
     df = read_table(path)
     df["ID"] = pd.to_numeric(df["ID"], errors="coerce")
-    return df.dropna(subset=["ID"]).astype({"ID": int}).drop_duplicates("ID")
+    df = df.dropna(subset=["ID"]).astype({"ID": int}).drop_duplicates("ID")
+    fix = df["ID"].isin(DATE_FIXES)
+    df.loc[fix, "EvaluationDate"] = df.loc[fix, "ID"].map(DATE_FIXES)
+    return df
 
 
 def comparable(df: pd.DataFrame) -> pd.DataFrame:
