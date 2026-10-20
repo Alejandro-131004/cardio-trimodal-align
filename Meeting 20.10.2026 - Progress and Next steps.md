@@ -10,6 +10,18 @@
 
 ---
 
+**Meeting conclusions (20/10/2026):**
+
+- Repeated recordings: keep all of them for now.
+
+- Test with a general LLM to see which variables come out of the reports, and see if they make sense. It can be ChatGPT or a similar external model, but be careful with the names and other private information. A local model is not needed for privacy reasons.
+
+- Extract the maximum number of variables from the reports and see the clustering, that is, a table with one row per patient and one column per variable, and check if the patients form groups by themselves.
+
+- Once we have the variables, use models that create representations of them. TabPFN: foundation model for tabular data.
+
+---
+
 **Done:**
 
 - New notebook `Data_Preparation.ipynb`, the shared code (paths, readers, recording index) is in `src/multiscope.py`, and `Data_Processing.ipynb` stays as the analysis that led to the decisions.
@@ -22,7 +34,7 @@
 
 - Ignored the Rijuven files of the patients with ID greater than 108, so 118, 119, 121 and 122 keep only their new app recordings. In total there are 1350 recordings of 289 patients, and all of them are in the DB.
 
-- The 314 zero-filled packets are removed, at the same positions in the ECG and the PCG, like the other lost packets.
+- The 314 zero-filled packets are removed, at the same positions in the ECG and the PCG, like the other lost packets. Only the packets where all values are 0 are removed, single zeros among real values are kept.
 
 - Missing data of the DB, for the patients with recordings. The hemodynamic data (AoMeanP, mPAP, pCWP...) is missing in more than 90%, HTP Probability in 39%, PSAP in 38% and Report_ecoTT in 12%.
 
@@ -34,21 +46,35 @@
 
 - Report_ecoTT de-identified: the reports had the name of the patient (`Nome:` field) and the health number (`NSC:`). The names and the identifier numbers were replaced by `[NAME]` and `[ID]`, and none of the reports that can be checked still has the name. Patients 292, 299, 300 and 301 have no real report, so there are 252 reports, saved in `data/processed/` (not pushed to GitHub).
 
+- Saturation (Section 8): the device can only measure values from 0 to 4095, so when the signal goes beyond, it is cut flat at the limit. 435 of the 1350 ECGs (32%) are cut at some point, and 124 in more than 5% of their samples. The more the ECG is cut, the lower its quality score (from 2.18 with no cut to 1.12 with more than 5%). The PCG is cut in almost every recording, but only briefly, and it does not change the score much. Nothing is removed, the share of cut samples is kept in `sat_ecg` and `sat_pcg`.
+
+---
+
+**What to do first:**
+
+- Fix the markdown of the notebook so it is consistent:
+    - Section 2: the bullet about `AV1` being the second recording (the supervisor confirmed it is the first), and the bullet about patient 168 (row 6 is all 0's in both the ECG and the PCG, and it is a lost packet, not a sensitivity problem).
+    - Section 4: a flat line at 0 can be real in the PCG (saturation), only a whole packet of 0's is fake. Also delete the first line of cell `4bc33535`, it is not needed.
+    - Section 5.1: show the number of recordings per repeated site in the output (141 with 2 and 11 with 3), and add the decision of keeping all repeats.
+    - Section 8: add the explanation of the threshold (within 10 of the limits) in the empty markdown cell, and the check cell that shows the ECG floor (3 to 9) and the Rijuven PCG maximum (about 0.95).
+
+- Before the LLM test, remove the remaining private information from the reports: the names of the doctors and technicians who signed them (`Dr.`, `Téc.`) and the exam dates. Save the result in a new CSV in `data/processed/`.
+
+- Test a general LLM on a small sample of reports (about 10) to see which variables come out, and check them against the report and the DB columns (IM, IT, IAO, FEVE, PSAP).
+
 ---
 
 **Next steps:**
 
-- Count how many recordings have the ECG saturated at 4095 (the R peaks are cut flat at the limit of the device).
+- Extract the maximum number of variables of the Report_ecoTT with the LLM, for all the reports.
 
-- Decide which recording to keep when there are repeats (the last one, the best score, or keep all of them), and what to do with the patients without scores (268+).
+- Clustering on the reports only (on the table of extracted variables).
 
-- Extract the important elements and variables of the Report_ecoTT (for example, using an LLM, maybe a local model like **MedGemma 27B**, or an API).
+- Representations of the variables with TabPFN.
 
 - Check missing data on the signals side (sites, apps, scores and 12 lead per patient).
 
 - Create a global dataset with everything per patient (signals, scores, DB variables, report variables and 12 lead).
-
-- Clustering on the reports only.
 
 - Perform clustering on the data to see whether the patients cluster together, using PCG and ECG.
 
@@ -58,16 +84,12 @@
 
 - Apply pre-trained LLMs to the raw data.
 
-- Foundation models for tabular data: a step much further ahead, after meeting my teammate.
-
 ---
 
 **Questions for the professor:**
 
 - Is there a newer version of the quality annotations with the patients from 268 to 301? If not, should we use the algorithm of my thesis group, or consider their quality unknown?
 
-- Repeated recordings: should we keep only the last one, the one with the best score, or all of them (more data and different qualities)?
+- Is the ECG saturation known? Should the saturated recordings be marked or removed?
 
-- Report_ecoTT: which variables are the most important to extract? Can I use an API (with the de-identified reports), or should it be a local model?
-
-- Is the ECG saturation at 4095 known? Should the saturated recordings be marked or removed?
+- Report_ecoTT: which variables are the most important to extract?
