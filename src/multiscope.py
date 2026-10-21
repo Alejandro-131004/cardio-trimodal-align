@@ -1,6 +1,7 @@
 """Shared code for the MultiScope notebooks: paths, helpers, signal readers and the recording index."""
 
 import re
+import json
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +26,9 @@ UNUSED_DIR = DATA_ROOT / "Unused"   # data the supervisor said to disregard
 
 CLINICAL_DB_GLOB = "18.09.2026_DB MultiScope*.xlsx"   # clinical database used in the thesis
 REPORT_COLUMN = "Report_ecoTT"                        # free-text echocardiography report
+LLM_REPORTS_FILE = OUTPUT_DIR / "reports_for_llm.csv"   # reports without any private information, to send to a language model
+SHARED_DB_FILE = OUTPUT_DIR / "db_deidentified.csv"   # all the columns of the database, without private information
+LLM_SAMPLE_FILE = OUTPUT_DIR / "reports_sample.csv"   # small random sample of reports, to test the language models
 
 RIJUVEN_ECG_FS = 500    # not stored in the .raw files, value from the original script
 RIJUVEN_MAX_ID = 108    # Rijuven files of later patients are ignored (they also have new app recordings)
@@ -136,6 +140,32 @@ def deidentify_report(text, name=None) -> str:
         if len(part) >= 4:
             text = re.sub(rf"\b{re.escape(part)}\b", "[NAME]", text, flags=re.IGNORECASE)
     return text
+
+DATE_RE = re.compile(r"(?<!\d)\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(?!\d)|(?<!\d)(?:19|20)\d{2}(?!\d)")   # dd/mm/yyyy, dd-mm-yy, dd.mm.yyyy or a year
+EXAM_RE = re.compile(r"\b[A-Z]{2,3}\d{9,}(?:-\d+[A-Z]?)?")                                         # exam number, e.g. BH2023110213-01
+
+
+def remove_private(text: str) -> str:
+    """Drop the signature block and replace the exam numbers, the signer numbers and the dates."""
+    text = text.split("Executado")[0]                               # who performed and validated the exam
+    text = re.sub(r"(\[NAME\]\s*)\d{4,5}\b", r"\1[ID]", text)       # number of the signer, right after the name
+    return DATE_RE.sub("[DATE]", EXAM_RE.sub("[ID]", text))
+
+FULL_DATE_RE = re.compile(r"(?<!\d)\d{1,2}[/.-]\d{1,2}[/.-]\d{4}(?!\d)")   # dd/mm/yyyy, dd-mm-yyyy or dd.mm.yyyy
+
+
+def birth_date(text: str):
+    """Earliest full date of a report with a birth date field (the other dates are later), else NaT."""
+    if "Nascimento" not in text:
+        return pd.NaT
+    dates = [pd.to_datetime(re.sub(r"[.-]", "/", d), format="%d/%m/%Y", errors="coerce") for d in FULL_DATE_RE.findall(text)]
+    return min((d for d in dates if pd.notna(d)), default=pd.NaT)
+
+
+def load_answers(path: Path) -> pd.DataFrame:
+    """One row per variable extracted by a language model (ID, name, value, unit, evidence)."""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return pd.DataFrame([{"ID": entry["ID"], **variable} for entry in data for variable in entry["variables"]])
 
 # ---------------------------------------------------------------- Readers
 
