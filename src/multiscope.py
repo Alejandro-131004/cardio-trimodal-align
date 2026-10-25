@@ -147,8 +147,9 @@ EXAM_RE = re.compile(r"\b[A-Z]{2,3}\d{9,}(?:-\d+[A-Z]?)?")                      
 
 def remove_private(text: str) -> str:
     """Drop the signature block and replace the exam numbers, the signer numbers and the dates."""
-    text = text.split("Executado")[0]                               # who performed and validated the exam
-    text = re.sub(r"(\[NAME\]\s*)\d{4,5}\b", r"\1[ID]", text)       # number of the signer, right after the name
+    text = text.split("Executado")[0]                                       # who performed and validated the exam
+    text = re.sub(r"(\[NAME\]\s*)\d{4,5}\b", r"\1[ID]", text)               # number of the signer, right after the name
+    text = re.sub(r"(Final|Preliminary)\s*\d{5,}", r"\1 [ID]", text)        # number of the signer, glued to the report status
     return DATE_RE.sub("[DATE]", EXAM_RE.sub("[ID]", text))
 
 FULL_DATE_RE = re.compile(r"(?<!\d)\d{1,2}[/.-]\d{1,2}[/.-]\d{4}(?!\d)")   # dd/mm/yyyy, dd-mm-yyyy or dd.mm.yyyy
