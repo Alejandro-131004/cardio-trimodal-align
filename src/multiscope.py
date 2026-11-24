@@ -16,6 +16,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = PROJECT_ROOT / "data" / "DatasetCHVNGE"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "processed"
 REPORTS_FILE = OUTPUT_DIR / "reports_deidentified.pkl"   # de-identified echocardiography reports
+PATIENTS_FILE = OUTPUT_DIR / "patients_labels.csv"     # one row per patient: quality per site and labels (Data_Preparation)
+RECORDINGS_FILE = OUTPUT_DIR / "recordings.pkl"        # one row per recording: paths, quality scores and saturation (Data_Preparation)
 
 NEW_APP_DIR = DATA_ROOT / "New_app_patients"
 RIJUVEN_DIR = DATA_ROOT / "Rijuven_patients"
